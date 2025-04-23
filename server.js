@@ -17,12 +17,22 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     console.log(`📥 Received frame (${data.length} bytes)`);
 
+    // Extract MAC address (first 17 bytes)
+    const macAddress = data.slice(0, 17).toString();
+    console.log(`🔑 MAC Address: ${macAddress}`);
+
+    // Ensure MAC address is valid and replace null bytes
+    const sanitizedMacAddress = macAddress.replace(/\x00/g, '').replace(/:/g, '-');
+
+    // The remaining data contains the image
+    const imageData = data.slice(17);
+
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext('2d');
     const imgData = ctx.createImageData(WIDTH, HEIGHT);
 
-    for (let i = 0, j = 0; i < data.length; i += 2, j += 4) {
-      const value = data.readUInt16BE(i);
+    for (let i = 0, j = 0; i < imageData.length; i += 2, j += 4) {
+      const value = imageData.readUInt16BE(i);
       const r = ((value >> 11) & 0x1F) * 255 / 31;
       const g = ((value >> 5) & 0x3F) * 255 / 63;
       const b = (value & 0x1F) * 255 / 31;
@@ -35,11 +45,12 @@ wss.on('connection', (ws) => {
 
     ctx.putImageData(imgData, 0, 0);
 
-    const out = fs.createWriteStream('output.png');
+    // Save the image with sanitized MAC address
+    const out = fs.createWriteStream(`output_${sanitizedMacAddress}.png`);
     const stream = canvas.createPNGStream();
     stream.pipe(out);
     out.on('finish', () => {
-      console.log('💾 Saved image as output.png');
+      console.log(`💾 Saved image as output_${sanitizedMacAddress}.png`);
     });
   });
 
